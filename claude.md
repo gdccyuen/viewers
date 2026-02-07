@@ -16,5 +16,6 @@ The following paths should be excluded from code analysis and searches:
 - **bus.html** - Hong Kong bus ETA display using Transport Department APIs
 - **chat.html** - JSON chat history renderer with markdown support and rating annotations
 - **chattree.html** - JSON chat tree explorer with collapsible message hierarchy
+- **json.html** - Interactive JSON tree viewer with expand/collapse, search, and path navigation
 - **mermaid.html** - Mermaid diagram editor with live preview and icon pack support
 

@@ -15,8 +15,8 @@ This project provides lightweight, browser-based viewers that can be deployed on
 | bus.html | - | Hong Kong bus ETA display |
 | chat.html | JSON | JSON chat history renderer |
 | chattree.html | JSON | JSON chat tree explorer with collapsible hierarchy |
+| json.html | JSON | Interactive JSON tree viewer with search |
 | mermaid.html | - | Mermaid diagram editor with live preview |
-| JSON Viewer | JSON (.json) | Syntax-highlighted JSON viewer |
 | Taiga Viewer | Taiga dump files | Viewer for Taiga project exports |
 | Calendar | Calendar files | Calendar display viewer |
 
