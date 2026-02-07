@@ -11,6 +11,7 @@ This project provides lightweight, browser-based viewers that can be deployed on
 | Viewer | File | Description |
 |--------|------|-------------|
 | tiaga.html | Markdown (.md) | Markdown document viewer |
+| bus.html | - | Hong Kong bus ETA display |
 | JSON Viewer | JSON (.json) | Syntax-highlighted JSON viewer |
 | Taiga Viewer | Taiga dump files | Viewer for Taiga project exports |
 | Calendar | Calendar files | Calendar display viewer |

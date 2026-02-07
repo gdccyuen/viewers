@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus ETA Display</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+            padding: 15px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #4a6fa5;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+        }
+        
+        .time-info {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        button.refresh {
+            background-color: #2ecc71;
+        }
+        
+        button.refresh:hover {
+            background-color: #27ae60;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 1.1rem;
+            color: #7f8c8d;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 5px solid #f5c6cb;
+        }
+        
+        .eta-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .route-group {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .route-header {
+            background-color: #4a6fa5;
+            color: white;
+            padding: 6px 15px;
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+        
+        .bus-list {
+            padding: 0;
+        }
+        
+        .bus-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .bus-item:last-child {
+            border-bottom: none;
+        }
+        
+        .bus-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .co-route {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #2c3e50;
+        }
+        
+        .eta-time {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .minutes {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        
+        .time-arrival {
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+        
+        .no-bus {
+            padding: 15px;
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        
+        .co-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            margin-left: 5px;
+        }
+        
+        .ctb {
+            background-color: #f39c12;
+            color: white;
+        }
+        
+        .kmb {
+            background-color: #e74c3c;
+            color: white;
+        }
+        
+        .nwfb {
+            background-color: #9b59b6;
+            color: white;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            color: #7f8c8d;
+            font-size: 0.85rem;
+        }
+        
+        @media (max-width: 400px) {
+            .bus-item {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .eta-time {
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h2>Bus Arrival Times</h2>
+        <div class="time-info" id="currentTime">Loading time...</div>
+    </header>
+    
+    <div class="controls">
+        <button id="refreshBtn" class="refresh">Refresh ETAs</button>
+    </div>
+    
+    <div id="loading" class="loading">Loading bus arrival information...</div>
+    
+    <div id="errorContainer" class="error" style="display: none;"></div>
+    
+    <div id="etaContainer" class="eta-container"></div>
+    
+    <div class="footer">
+        <p>Data provided by Hong Kong Transport Department</p>
+        <p>Last updated: <span id="lastUpdated">Never</span></p>
+    </div>
+
+    <script>
+        // Configuration
+        const PROXY_URL = '../getAnyURL.php?url=';
+        
+        const MORNING_URLS = [
+            "https://rt.data.gov.hk/v1.1/transport/citybus-nwfb/eta/CTB/001114/970/",
+            "https://rt.data.gov.hk/v1.1/transport/citybus-nwfb/eta/CTB/001069/905/",
+            "https://data.etabus.gov.hk/v1/transport/kmb/eta/B6606A91B6DE64E3/905/1",
+            "https://rt.data.gov.hk/v1.1/transport/citybus-nwfb/eta/CTB/001192/904/",
+            "https://data.etabus.gov.hk/v1/transport/kmb/eta/1C6C94ABE1C78BBB/904/1"
+        ];
+        
+        const AFTERNOON_URLS = [
+            "https://rt.data.gov.hk/v1.1/transport/citybus-nwfb/eta/CTB/001396/905/",
+            "https://data.etabus.gov.hk/v1/transport/kmb/eta/5CA7841E84D52C8A/905/1",
+            "https://rt.data.gov.hk/v1.1/transport/citybus-nwfb/eta/CTB/001396/904/",
+            "https://data.etabus.gov.hk/v1/transport/kmb/eta/5CA7841E84D52C8A/904/1"
+        ];
+        
+        // State variables
+        let useMorningURLs = new Date().getHours() < 16;
+        let lastFetchTime = null;
+        
+        // DOM Elements
+        const currentTimeEl = document.getElementById('currentTime');
+        const loadingEl = document.getElementById('loading');
+        const errorContainerEl = document.getElementById('errorContainer');
+        const etaContainerEl = document.getElementById('etaContainer');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const lastUpdatedEl = document.getElementById('lastUpdated');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTimeDisplay();
+            fetchAllETAs();
+            
+            // Set up periodic time updates
+            setInterval(updateTimeDisplay, 1000);
+            
+            // Set up event listeners
+            refreshBtn.addEventListener('click', fetchAllETAs);
+        });
+        
+        // Update current time display
+        function updateTimeDisplay() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            };
+            currentTimeEl.textContent = now.toLocaleDateString('en-US', options);
+            
+            // Auto-switch URL sets based on time
+            const currentHour = now.getHours();
+            const shouldUseMorningURLs = currentHour < 16;
+            
+            if (shouldUseMorningURLs !== useMorningURLs) {
+                useMorningURLs = shouldUseMorningURLs;
+                fetchAllETAs();
+            }
+        }
+        
+        // Fetch all ETA data
+        async function fetchAllETAs() {
+            // Show loading state
+            loadingEl.style.display = 'block';
+            errorContainerEl.style.display = 'none';
+            etaContainerEl.innerHTML = '';
+            
+            try {
+                const urls = useMorningURLs ? MORNING_URLS : AFTERNOON_URLS;
+                const fetchPromises = urls.map(url => fetchETA(url));
+                
+                const results = await Promise.allSettled(fetchPromises);
+                
+                // Process results
+                let allETAs = [];
+                let errors = [];
+                
+                results.forEach((result, index) => {
+                    if (result.status === 'fulfilled' && result.value) {
+                        allETAs = allETAs.concat(result.value);
+                    } else {
+                        errors.push(`Failed to fetch from URL ${index + 1}`);
+                    }
+                });
+                
+                // Hide loading
+                loadingEl.style.display = 'none';
+                
+                // Show errors if any
+                if (errors.length > 0) {
+                    errorContainerEl.style.display = 'block';
+                    errorContainerEl.innerHTML = `
+                        <strong>Partial Data Loaded</strong>
+                        <p>Some bus data could not be loaded: ${errors.join(', ')}</p>
+                    `;
+                }
+                
+                // Process and display ETAs
+                displayETAs(allETAs);
+                
+                // Update last updated time
+                lastFetchTime = new Date();
+                lastUpdatedEl.textContent = lastFetchTime.toLocaleTimeString();
+                
+            } catch (error) {
+                loadingEl.style.display = 'none';
+                errorContainerEl.style.display = 'block';
+                errorContainerEl.innerHTML = `
+                    <strong>Error Loading Data</strong>
+                    <p>${error.message}</p>
+                `;
+                console.error('Error fetching ETAs:', error);
+            }
+        }
+        
+        // Fetch ETA from a single URL
+        async function fetchETA(url) {
+            try {
+                const fullUrl = PROXY_URL + encodeURIComponent(url);
+                const response = await fetch(fullUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Extract relevant information from the response
+                if (data.data && Array.isArray(data.data)) {
+                    return data.data.map(item => {
+                        // Calculate minutes and seconds until arrival
+                        let minutes = null;
+                        let seconds = null;
+                        let arrivalTime = null;
+                        
+                        if (item.eta) {
+                            const etaTime = new Date(item.eta);
+                            const now = new Date();
+                            const diffMs = etaTime - now;
+                            
+                            if (diffMs > 0) {
+                                minutes = Math.floor(diffMs / (1000 * 60));
+                                seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+                            } else {
+                                minutes = 0;
+                                seconds = 0;
+                            }
+                            
+                            arrivalTime = etaTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        }
+                        
+                        return {
+                            route: item.route,
+                            co: item.co,
+                            eta: item.eta,
+                            arrivalTime: arrivalTime,
+                            minutes: minutes,
+                            seconds: seconds,
+                            dest_tc: item.dest_tc || '',
+                            dest_en: item.dest_en || '',
+                            remark: item.rmk_en || item.rmk_tc || ''
+                        };
+                    }).filter(item => item.minutes !== null); // Filter out buses with null ETA
+                }
+                
+                return [];
+            } catch (error) {
+                console.error(`Error fetching from ${url}:`, error);
+                return [];
+            }
+        }
+        
+        // Helper: Get company badge class
+        function getCompanyBadgeClass(co) {
+            if (!co) return '';
+            const coLower = co.toLowerCase();
+            if (coLower.includes('ctb') || coLower.includes('citybus')) return 'ctb';
+            if (coLower.includes('kmb')) return 'kmb';
+            if (coLower.includes('nwfb')) return 'nwfb';
+            return '';
+        }
+
+        // Helper: Create HTML for a single bus item
+        function createBusItemHTML(bus) {
+            const badgeClass = getCompanyBadgeClass(bus.co);
+            return `
+                        <div class="bus-item">
+                            <div class="bus-info">
+                                <div class="co-route">
+                                    ${bus.co || 'Unknown'}
+                                    <span class="co-badge ${badgeClass}">${bus.co || 'Unknown'}</span>
+                                </div>
+                            </div>
+                            <div class="eta-time">
+                                <div class="minutes">
+                                    ${bus.minutes === 0 && bus.seconds === 0 ? 'Arriving' : `${bus.minutes}m ${bus.seconds}s`}
+                                    <span class="time-arrival">~ ${bus.arrivalTime || 'No ETA'}</span>
+                                </div>
+                            </div>
+                        </div>
+            `;
+        }
+
+        // Helper: Create HTML for a route group
+        function createRouteGroupHTML(route, buses) {
+            return `
+                    <div class="route-group">
+                        <div class="route-header">Route ${route}</div>
+                        <div class="bus-list">
+${buses.map(createBusItemHTML).join('')}
+                        </div>
+                    </div>
+            `;
+        }
+
+        // Display ETAs in the container
+        function displayETAs(etas) {
+            if (etas.length === 0) {
+                etaContainerEl.innerHTML = `
+                    <div class="route-group">
+                        <div class="route-header">No Buses Available</div>
+                        <div class="no-bus">No upcoming buses found for the selected routes and stops.</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Group by route
+            const groupedByRoute = {};
+            
+            etas.forEach(eta => {
+                if (!groupedByRoute[eta.route]) {
+                    groupedByRoute[eta.route] = [];
+                }
+                groupedByRoute[eta.route].push(eta);
+            });
+            
+            // Sort routes by decending order
+            const sortedRoutes = Object.keys(groupedByRoute).sort((a, b) => b - a);
+
+            // Generate HTML for each route using helper functions
+            etaContainerEl.innerHTML = sortedRoutes.map(route => {
+                const routeETAs = groupedByRoute[route];
+
+                // Sort by arrival time (soonest first)
+                routeETAs.sort((a, b) => {
+                    if (a.minutes === b.minutes) {
+                        return a.seconds - b.seconds;
+                    }
+                    return a.minutes - b.minutes;
+                });
+
+                return createRouteGroupHTML(route, routeETAs);
+            }).join('');
+        }
+    </script>
+</body>
+</html>
