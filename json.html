@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background-color: #f5f5f5;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+            background-color: #e0e0e0;
+            padding: 0 15px;
+            color: #333;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0 8px;
+            border-right: 1px solid #ccc;
+        }
+
+        .control-group:last-child {
+            border-right: none;
+        }
+
+        .control-button {
+            padding: 4px 10px;
+            font-size: 12px;
+            border: 1px solid #ccc;
+            background-color: white;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .control-button:hover {
+            background-color: #4a6fa5;
+            color: white;
+            border-color: #4a6fa5;
+        }
+
+        .search-container {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .search-input {
+            padding: 4px 8px;
+            font-size: 12px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            width: 180px;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: #4a6fa5;
+        }
+
+        .search-nav {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .action-button {
+            padding: 5px 15px;
+            background-color: #4a6fa5;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .action-button:hover {
+            background-color: #3a5a8c;
+        }
+
+        /* Main Content Area */
+        .content-area {
+            position: relative;
+            height: calc(100vh - 40px);
+            display: flex;
+        }
+
+        /* JSON Input Panel */
+        .input-container {
+            width: 100%;
+            padding: 20px;
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease;
+            overflow: hidden;
+        }
+
+        .input-container.hidden {
+            width: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .text-area-wrapper {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+        }
+
+        .text-area {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ddd;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            background-color: transparent;
+        }
+
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #aaa;
+            text-align: center;
+            pointer-events: none;
+            width: 80%;
+            transition: opacity 0.3s;
+        }
+
+        /* JSON Tree Display */
+        .json-container {
+            flex: 1;
+            padding: 20px;
+            background-color: #fafafa;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .json-container.visible {
+            display: block;
+        }
+
+        .json-tree {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .json-node {
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .json-toggle {
+            position: absolute;
+            left: 0;
+            top: 3px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .json-toggle:hover {
+            color: #4a6fa5;
+        }
+
+        .json-toggle::before {
+            content: '▶';
+        }
+
+        .json-toggle.expanded::before {
+            content: '▼';
+        }
+
+        .json-toggle.empty {
+            visibility: hidden;
+        }
+
+        .json-key {
+            color: #005cc5;
+        }
+
+        .json-string {
+            color: #032f62;
+        }
+
+        .json-number {
+            color: #005cc5;
+        }
+
+        .json-boolean {
+            color: #0070d1;
+        }
+
+        .json-null {
+            color: #6f7378;
+        }
+
+        .json-bracket {
+            color: #6a737d;
+        }
+
+        .json-node.selected {
+            background-color: #fff3cd;
+        }
+
+        .json-node.highlight {
+            background-color: #d4edda;
+        }
+
+        .json-path {
+            margin-top: 10px;
+            padding: 10px 15px;
+            background-color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            border-bottom: 1px solid #ccc;
+            display: none;
+        }
+
+        .json-path.visible {
+            display: block;
+        }
+
+        .json-path-label {
+            font-weight: bold;
+            color: #4a6fa5;
+        }
+
+        /* File Drag Overlay */
+        .file-drag-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(74, 111, 165, 0.1);
+            border: 3px dashed #4a6fa5;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: #4a6fa5;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .file-drag-overlay.active {
+            display: flex;
+        }
+
+        /* Error Message Styling */
+        .error {
+            color: #c44;
+            font-weight: bold;
+        }
+
+        .success {
+            color: #484;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <span class="status-text">Ready</span>
+        <div class="controls">
+            <div class="control-group">
+                <button class="control-button" id="expandAllBtn">Expand All</button>
+                <button class="control-button" id="collapseAllBtn">Collapse All</button>
+            </div>
+            <div class="control-group">
+                <button class="control-button" id="expandSubBtn">+ Subs</button>
+                <button class="control-button" id="collapseSubBtn">- Subs</button>
+            </div>
+            <div class="control-group">
+                <button class="control-button" id="expandOneBtn">+ One</button>
+                <button class="control-button" id="collapseOneBtn">- One</button>
+            </div>
+            <div class="control-group search-container">
+                <input type="text" class="search-input" id="searchInput" placeholder="Search...">
+                <span class="search-nav" id="searchNav"></span>
+            </div>
+        </div>
+        <button class="action-button" id="actionBtn">Render</button>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="content-area">
+        <!-- Text Input Area -->
+        <div class="input-container" id="inputContainer">
+            <div class="text-area-wrapper">
+                <textarea class="text-area" id="jsonInput" placeholder="Paste JSON or drag a file here..."></textarea>
+                <div class="watermark" id="watermark">
+                    Paste JSON data or drag a JSON file here
+                </div>
+            </div>
+        </div>
+
+        <!-- JSON Tree Display -->
+        <div class="json-container" id="jsonContainer">
+            <div class="json-path" id="jsonPath">
+                <span class="json-path-label">Path:</span> <span id="pathValue"></span>
+            </div>
+            <div class="json-tree" id="jsonTree"></div>
+        </div>
+    </div>
+
+    <!-- File Drag Overlay -->
+    <div class="file-drag-overlay" id="fileDragOverlay">
+        Drop JSON file here
+    </div>
+
+    <script>
+        // DOM Elements
+        const statusText = document.querySelector('.status-text');
+        const actionBtn = document.getElementById('actionBtn');
+        const jsonInput = document.getElementById('jsonInput');
+        const watermark = document.getElementById('watermark');
+        const inputContainer = document.getElementById('inputContainer');
+        const jsonContainer = document.getElementById('jsonContainer');
+        const jsonTree = document.getElementById('jsonTree');
+        const jsonPath = document.getElementById('jsonPath');
+        const pathValue = document.getElementById('pathValue');
+        const fileDragOverlay = document.getElementById('fileDragOverlay');
+        const searchInput = document.getElementById('searchInput');
+        const searchNav = document.getElementById('searchNav');
+
+        // Control Buttons
+        const expandAllBtn = document.getElementById('expandAllBtn');
+        const collapseAllBtn = document.getElementById('collapseAllBtn');
+        const expandSubBtn = document.getElementById('expandSubBtn');
+        const collapseSubBtn = document.getElementById('collapseSubBtn');
+        const expandOneBtn = document.getElementById('expandOneBtn');
+        const collapseOneBtn = document.getElementById('collapseOneBtn');
+
+        // State Variables
+        let isRendered = false;
+        let jsonData = null;
+        let currentPath = '';
+        let selectedPath = '';
+        let expandLevel = 0;
+        let searchMatches = [];
+        let currentMatchIndex = -1;
+
+        // Initialize
+        function init() {
+            updateStatus('Ready');
+            setupEventListeners();
+        }
+
+        // Set up event listeners
+        function setupEventListeners() {
+            // Action button
+            actionBtn.addEventListener('click', handleActionButtonClick);
+
+            // Text area input
+            jsonInput.addEventListener('input', handleTextInput);
+
+            // File drag and drop
+            document.addEventListener('dragover', handleDragOver);
+            document.addEventListener('dragleave', handleDragLeave);
+            document.addEventListener('drop', handleFileDrop);
+
+            // Control buttons
+            expandAllBtn.addEventListener('click', () => setAllExpanded(true));
+            collapseAllBtn.addEventListener('click', () => setAllExpanded(false));
+            expandSubBtn.addEventListener('click', () => setSubExpanded(true));
+            collapseSubBtn.addEventListener('click', () => setSubExpanded(false));
+            expandOneBtn.addEventListener('click', () => setOneLevelExpanded(true));
+            collapseOneBtn.addEventListener('click', () => setOneLevelExpanded(false));
+
+            // Search
+            searchInput.addEventListener('input', handleSearch);
+            searchInput.addEventListener('keydown', handleSearchKeydown);
+        }
+
+        // Handle action button click
+        function handleActionButtonClick() {
+            if (!isRendered) {
+                renderJSON();
+            } else {
+                clearRendering();
+            }
+        }
+
+        // Handle text input
+        function handleTextInput() {
+            const hasContent = jsonInput.value.length > 0;
+            watermark.style.opacity = hasContent ? '0' : '1';
+
+            if (isRendered && hasContent) {
+                clearRendering();
+            }
+        }
+
+        // Render JSON as tree
+        function renderJSON() {
+            const jsonText = jsonInput.value.trim();
+
+            if (!jsonText) {
+                updateStatus('Error: No JSON content to render', true);
+                return;
+            }
+
+            try {
+                jsonData = JSON.parse(jsonText);
+            } catch (error) {
+                updateStatus(`Error: Invalid JSON - ${error.message}`, true);
+                return;
+            }
+
+            // Build tree
+            jsonTree.innerHTML = '';
+            jsonTree.appendChild(createNode(jsonData, '', '$'));
+
+            // Update UI
+            inputContainer.classList.add('hidden');
+            jsonContainer.classList.add('visible');
+            actionBtn.textContent = 'Clear';
+            isRendered = true;
+            expandLevel = 0;
+
+            updateStatus('Rendered successfully', false, true);
+        }
+
+        // Create a DOM node for a JSON value
+        function createNode(value, key, path) {
+            const node = document.createElement('div');
+            node.className = 'json-node';
+            node.dataset.path = path;
+
+            const type = getValueType(value);
+
+            if (type === 'object' || type === 'array') {
+                const isArray = type === 'array';
+                const keys = isArray ? value : Object.keys(value);
+                const length = keys.length;
+
+                // Toggle button
+                const toggle = document.createElement('span');
+                toggle.className = 'json-toggle';
+                if (length === 0) {
+                    toggle.classList.add('empty');
+                }
+                toggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggle.classList.toggle('expanded');
+                    node.classList.toggle('expanded');
+                });
+                node.appendChild(toggle);
+
+                // Key
+                if (key !== '') {
+                    const keySpan = document.createElement('span');
+                    keySpan.className = 'json-key';
+                    keySpan.textContent = isArray ? '' : `"${key}": `;
+                    node.appendChild(keySpan);
+                }
+
+                // Opening bracket
+                const openBracket = document.createElement('span');
+                openBracket.className = 'json-bracket';
+                openBracket.textContent = isArray ? '[' : '{';
+                node.appendChild(openBracket);
+
+                // Children container
+                const children = document.createElement('div');
+                children.className = 'json-children';
+                children.style.display = 'none';
+
+                keys.forEach((k, i) => {
+                    const childValue = isArray ? value[k] : value[k];
+                    const childPath = isArray ? `${path}[${k}]` : `${path}.${k}`;
+                    const childNode = createNode(childValue, k, childPath);
+                    children.appendChild(childNode);
+
+                    if (i < length - 1) {
+                        const comma = document.createElement('span');
+                        comma.className = 'json-bracket';
+                        comma.textContent = ',';
+                        children.appendChild(comma);
+                    }
+                });
+
+                node.appendChild(children);
+
+                // Closing bracket
+                const closeBracket = document.createElement('span');
+                closeBracket.className = 'json-bracket';
+                closeBracket.textContent = isArray ? ']' : '}';
+                node.appendChild(closeBracket);
+
+                // Click handler for selection
+                node.addEventListener('click', (e) => {
+                    if (e.target === toggle || e.target.classList.contains('json-toggle')) return;
+                    selectNode(path, node);
+                });
+
+            } else {
+                // Primitive value
+                const toggle = document.createElement('span');
+                toggle.className = 'json-toggle empty';
+                node.appendChild(toggle);
+
+                if (key !== '') {
+                    const keySpan = document.createElement('span');
+                    keySpan.className = 'json-key';
+                    keySpan.textContent = `"${key}": `;
+                    node.appendChild(keySpan);
+                }
+
+                const valueSpan = document.createElement('span');
+                valueSpan.className = `json-${type}`;
+                valueSpan.textContent = formatValue(value, type);
+                node.appendChild(valueSpan);
+
+                // Click handler for selection
+                node.addEventListener('click', () => selectNode(path, node));
+            }
+
+            return node;
+        }
+
+        // Get value type
+        function getValueType(value) {
+            if (value === null) return 'null';
+            if (Array.isArray(value)) return 'array';
+            return typeof value;
+        }
+
+        // Format primitive value
+        function formatValue(value, type) {
+            if (type === 'string') return `"${value}"`;
+            if (type === 'boolean') return String(value);
+            return String(value);
+        }
+
+        // Select node and show path
+        function selectNode(path, node) {
+            // Clear previous selection
+            document.querySelectorAll('.json-node.selected').forEach(n => {
+                n.classList.remove('selected');
+            });
+
+            // Add selection to current
+            node.classList.add('selected');
+            selectedPath = path;
+
+            // Update path display
+            currentPath = path;
+            pathValue.textContent = path;
+            jsonPath.classList.add('visible');
+        }
+
+        // Set all nodes expanded or collapsed
+        function setAllExpanded(expanded) {
+            const toggles = jsonTree.querySelectorAll('.json-toggle:not(.empty)');
+            toggles.forEach(toggle => {
+                if (expanded) {
+                    toggle.classList.add('expanded');
+                    toggle.parentElement.classList.add('expanded');
+                    toggle.parentElement.querySelector('.json-children').style.display = 'block';
+                } else {
+                    toggle.classList.remove('expanded');
+                    toggle.parentElement.classList.remove('expanded');
+                    toggle.parentElement.querySelector('.json-children').style.display = 'none';
+                }
+            });
+        }
+
+        // Set sub-levels expanded or collapsed
+        function setSubExpanded(expanded) {
+            const selected = jsonTree.querySelector('.json-node.selected');
+            if (!selected) {
+                updateStatus('Select a node first', true);
+                return;
+            }
+
+            const toggles = selected.querySelectorAll('.json-toggle:not(.empty)');
+            toggles.forEach(toggle => {
+                if (expanded) {
+                    toggle.classList.add('expanded');
+                    toggle.parentElement.classList.add('expanded');
+                    toggle.parentElement.querySelector('.json-children').style.display = 'block';
+                } else {
+                    toggle.classList.remove('expanded');
+                    toggle.parentElement.classList.remove('expanded');
+                    toggle.parentElement.querySelector('.json-children').style.display = 'none';
+                }
+            });
+        }
+
+        // Expand or collapse one level relative to current expansion
+        function setOneLevelExpanded(expanded) {
+            const toggles = jsonTree.querySelectorAll('.json-toggle:not(.empty)');
+            toggles.forEach(toggle => {
+                const parent = toggle.parentElement;
+                const children = parent.querySelector('.json-children');
+
+                if (expanded) {
+                    // Expand one more level
+                    if (!parent.classList.contains('expanded')) {
+                        toggle.classList.add('expanded');
+                        parent.classList.add('expanded');
+                        children.style.display = 'block';
+                    }
+                } else {
+                    // Collapse one level
+                    if (parent.classList.contains('expanded')) {
+                        toggle.classList.remove('expanded');
+                        parent.classList.remove('expanded');
+                        children.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        // Handle search
+        function handleSearch() {
+            const query = searchInput.value.trim().toLowerCase();
+            if (!query) {
+                clearHighlights();
+                searchNav.textContent = '';
+                return;
+            }
+
+            searchMatches = [];
+            currentMatchIndex = -1;
+
+            // Search through all nodes
+            const nodes = jsonTree.querySelectorAll('.json-node');
+            nodes.forEach(node => {
+                const text = node.textContent.toLowerCase();
+                if (text.includes(query)) {
+                    node.classList.add('highlight');
+                    searchMatches.push(node);
+                } else {
+                    node.classList.remove('highlight');
+                }
+            });
+
+            if (searchMatches.length > 0) {
+                currentMatchIndex = 0;
+                highlightMatch();
+            }
+
+            searchNav.textContent = searchMatches.length > 0
+                ? `${currentMatchIndex + 1}/${searchMatches.length}`
+                : '0/0';
+        }
+
+        // Handle search keyboard navigation
+        function handleSearchKeydown(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (searchMatches.length > 0) {
+                    currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
+                    highlightMatch();
+                    searchNav.textContent = `${currentMatchIndex + 1}/${searchMatches.length}`;
+                }
+            }
+        }
+
+        // Highlight current match and expand path
+        function highlightMatch() {
+            clearHighlights();
+            const node = searchMatches[currentMatchIndex];
+            node.classList.add('highlight');
+
+            // Expand all ancestors
+            let parent = node.parentElement;
+            while (parent && parent.classList.contains('json-children')) {
+                const parentNode = parent.parentElement;
+                if (parentNode) {
+                    const toggle = parentNode.querySelector('.json-toggle:not(.empty)');
+                    if (toggle && !toggle.classList.contains('expanded')) {
+                        toggle.classList.add('expanded');
+                        parentNode.classList.add('expanded');
+                        parent.style.display = 'block';
+                    }
+                }
+                parent = parent.parentElement;
+            }
+
+            node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Clear search highlights
+        function clearHighlights() {
+            jsonTree.querySelectorAll('.json-node.highlight').forEach(node => {
+                node.classList.remove('highlight');
+            });
+        }
+
+        // Clear rendering
+        function clearRendering() {
+            inputContainer.classList.remove('hidden');
+            jsonContainer.classList.remove('visible');
+            jsonTree.innerHTML = '';
+            jsonPath.classList.remove('visible');
+            pathValue.textContent = '';
+            currentPath = '';
+            selectedPath = '';
+            jsonData = null;
+            isRendered = false;
+            actionBtn.textContent = 'Render';
+            searchInput.value = '';
+            searchNav.textContent = '';
+            clearHighlights();
+            updateStatus('Ready');
+        }
+
+        // Handle drag over
+        function handleDragOver(e) {
+            e.preventDefault();
+            if (e.dataTransfer.types.includes('Files')) {
+                fileDragOverlay.classList.add('active');
+            }
+        }
+
+        // Handle drag leave
+        function handleDragLeave(e) {
+            if (e.clientX === 0 || e.clientY === 0 ||
+                e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+                fileDragOverlay.classList.remove('active');
+            }
+        }
+
+        // Handle file drop
+        function handleFileDrop(e) {
+            e.preventDefault();
+            fileDragOverlay.classList.remove('active');
+
+            const files = e.dataTransfer.files;
+            if (files.length === 0) return;
+
+            const file = files[0];
+            if (!file.name.toLowerCase().endsWith('.json')) {
+                updateStatus('Error: Not a JSON file (.json)', true);
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                jsonInput.value = event.target.result;
+                watermark.style.opacity = '0';
+                updateStatus(`Loaded: ${file.name} (${Math.round(file.size/1024)}KB)`, false, true);
+                renderJSON();
+            };
+            reader.onerror = function() {
+                updateStatus('Error: Failed to read file', true);
+            };
+            reader.readAsText(file);
+        }
+
+        // Update status text
+        function updateStatus(message, isError = false) {
+            statusText.textContent = message;
+            statusText.className = 'status-text' + (isError ? ' error' : '');
+        }
+
+        // Initialize
+        init();
+    </script>
+</body>
+</html>
