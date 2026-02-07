@@ -11,6 +11,7 @@ This project provides lightweight, browser-based viewers that can be deployed on
 | Viewer | File | Description |
 |--------|------|-------------|
 | tiaga.html | Markdown (.md) | Markdown document viewer |
+| md.html | Markdown (.md) | Simple Markdown renderer |
 | bus.html | - | Hong Kong bus ETA display |
 | chat.html | JSON | JSON chat history renderer |
 | chattree.html | JSON | JSON chat tree explorer with collapsible hierarchy |
