@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Chat Tree Explorer</title>
+    <!-- Markdown libraries from CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background-color: #f5f5f5;
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+            background-color: #e0e0e0;
+            padding: 0 15px;
+            color: #333;
+            border-bottom: 1px solid #ccc;
+        }
+        
+        .status-text {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .action-button {
+            padding: 5px 15px;
+            background-color: #4a6fa5;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        .action-button:hover {
+            background-color: #3a5a8c;
+        }
+        
+        .action-button:active {
+            background-color: #2a4a7c;
+        }
+        
+        /* Main content area */
+        .content-area {
+            position: relative;
+            height: calc(100vh - 40px);
+            width: 100%;
+        }
+        
+        /* Text area for JSON input */
+        .input-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            transition: left 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .text-area-wrapper {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+        }
+        
+        .text-area {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ddd;
+            padding: 15px;
+            font-size: 16px;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            background-color: transparent;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #aaa;
+            text-align: center;
+            pointer-events: none;
+            width: 80%;
+            transition: opacity 0.3s;
+        }
+        
+        /* Rendering area */
+        .rendering-container {
+            position: absolute;
+            top: 0;
+            left: 100%;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            transition: left 0.3s ease;
+            z-index: 10;
+        }
+        
+        .rendering-container.visible {
+            left: 0;
+        }
+        
+        /* Two-pane layout */
+        .tree-pane {
+            width: 20%;
+            background-color: #f8f8f8;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        .content-pane {
+            width: 80%;
+            background-color: #f0f8f0;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        /* Chat tree styling */
+        .chat-tree-container {
+            width: 100%;
+        }
+        
+        .chat-thread {
+            margin-bottom: 25px;
+        }
+        
+        .thread-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a6fa5;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+            padding-left: 5px;
+        }
+        
+        .data-rating {
+            display: inline-block;
+            margin-left: 8px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        /* Tree node styling */
+        .tree-node {
+            margin: 2px 0;
+            padding-left: 0px;
+            position: relative;
+        }
+        
+        .tree-node-content {
+            display: flex;
+            align-items: center;
+            padding: 2px 3px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            margin: 2px 0;
+        }
+        
+        .tree-node-content:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        .tree-node-content.active {
+            background-color: rgba(74, 111, 165, 0.1);
+            border-color: rgba(74, 111, 165, 0.3);
+        }
+        
+        .node-emoji {
+            margin-right: 6px;
+            font-size: 12px;
+        }
+        
+        .node-label {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        
+        .node-children {
+            margin-left: 15px;
+            border-left: 1px dashed #ccc;
+            padding-left: 8px;
+        }
+        
+        /* Node colors based on role and annotation */
+        .node-user {
+            color: #2d5a2d;
+            background-color: #e8f5e8;
+        }
+        
+        .node-assistant {
+            color: #665c00;
+            background-color: #fff8e1;
+        }
+        
+        .node-positive {
+            color: #4a2d7f;
+            background-color: #f0e8ff;
+        }
+        
+        .node-negative {
+            color: #7f2d2d;
+            background-color: #ffe8e8;
+        }
+        
+        /* Content pane styling */
+        .content-header {
+            font-size: 16px;
+            font-weight: 600;
+            color: #4a6fa5;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .content-body {
+            padding: 20px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            min-height: 300px;
+        }
+        
+        .annotation-info {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .comment-text {
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        
+        .model-id {
+            font-size: 14px;
+            color: #777;
+            font-style: italic;
+        }
+        
+        .markdown-content {
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        
+        .markdown-content h1, 
+        .markdown-content h2, 
+        .markdown-content h3 {
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+        }
+        
+        .markdown-content p {
+            margin-bottom: 1em;
+        }
+        
+        .markdown-content ul, 
+        .markdown-content ol {
+            margin-left: 1.5em;
+            margin-bottom: 1em;
+        }
+        
+        .markdown-content code {
+            background-color: rgba(0, 0, 0, 0.05);
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .markdown-content pre {
+            background-color: rgba(0, 0, 0, 0.05);
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin-bottom: 1em;
+        }
+        
+        .markdown-content blockquote {
+            border-left: 3px solid #ccc;
+            padding-left: 10px;
+            margin-left: 0;
+            color: #666;
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+		/* Update the file-drag-overlay style */
+		.file-drag-overlay {
+			position: fixed; /* Changed from absolute to fixed */
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			background-color: rgba(74, 111, 165, 0.1);
+			border: 3px dashed #4a6fa5;
+			display: none;
+			justify-content: center;
+			align-items: center;
+			font-size: 24px;
+			color: #4a6fa5;
+			z-index: 1000; /* Higher z-index */
+			pointer-events: none; /* Don't interfere with drop events */
+		}
+
+		.file-drag-overlay.active {
+			display: flex;
+		}
+        
+        /* Error message styling */
+        .error {
+            color: #c44;
+            font-weight: bold;
+        }
+        
+        .success {
+            color: #484;
+            font-weight: bold;
+        }
+        
+        /* JSON syntax error display */
+        .json-error {
+            padding: 15px;
+            margin: 10px;
+            background-color: #ffe6e6;
+            border: 1px solid #ff9999;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+        }
+        
+        /* Collapse/expand controls */
+        .collapse-control {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            margin-right: 4px;
+            cursor: pointer;
+            text-align: center;
+            line-height: 14px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 12px;
+            user-select: none;
+        }
+        
+        .node-has-children .tree-node-content {
+            padding-left: 0;
+        }
+        
+        .node-collapsed .node-children {
+            display: none;
+        }
+        
+        /* Right pane tabs for multiple chats */
+        .chat-tabs {
+            display: flex;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .chat-tab {
+            padding: 8px 16px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-right: 5px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .chat-tab.active {
+            border-bottom-color: #4a6fa5;
+            color: #4a6fa5;
+        }
+    </style>
+</head>
+<body>
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-text">Ready</div>
+        <button class="action-button" id="actionBtn">Render</button>
+    </div>
+    
+    <!-- Main Content Area -->
+    <div class="content-area">
+        <!-- Text Input Area -->
+        <div class="input-container">
+            <div class="text-area-wrapper">
+                <textarea class="text-area" id="jsonInput"></textarea>
+                <div class="watermark" id="watermark">
+                    Paste JSON data or drag a JSON file here
+                </div>
+            </div>
+        </div>
+        
+        <!-- Rendering Area -->
+        <div class="rendering-container" id="renderingArea">
+            <!-- Left Pane: Tree View -->
+            <div class="tree-pane" id="treePane">
+                <!-- Tree will be rendered here -->
+            </div>
+            
+            <!-- Right Pane: Content View -->
+            <div class="content-pane" id="contentPane">
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-state-icon">📄</div>
+                    <div>Select a message from the tree to view its content</div>
+                </div>
+                <div class="content-display" id="contentDisplay" style="display: none;">
+                    <div class="content-header">
+                        <span id="contentTitle">Message Details</span>
+                        <span id="contentTimestamp"></span>
+                    </div>
+                    <div class="content-body">
+                        <div id="annotationInfo" class="annotation-info" style="display: none;">
+                            <div class="comment-text" id="commentText"></div>
+                            <div class="model-id" id="modelId"></div>
+                        </div>
+                        <div class="markdown-content" id="messageContent">
+                            <!-- Markdown content will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- File Drag Overlay -->
+        <div class="file-drag-overlay" id="fileDragOverlay">
+            Drop JSON file here
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const statusText = document.querySelector('.status-text');
+        const actionBtn = document.getElementById('actionBtn');
+        const jsonInput = document.getElementById('jsonInput');
+        const watermark = document.getElementById('watermark');
+        const renderingArea = document.getElementById('renderingArea');
+        const treePane = document.getElementById('treePane');
+        const contentPane = document.getElementById('contentPane');
+        const emptyState = document.getElementById('emptyState');
+        const contentDisplay = document.getElementById('contentDisplay');
+        const contentTitle = document.getElementById('contentTitle');
+        const contentTimestamp = document.getElementById('contentTimestamp');
+        const annotationInfo = document.getElementById('annotationInfo');
+        const commentText = document.getElementById('commentText');
+        const modelId = document.getElementById('modelId');
+        const messageContent = document.getElementById('messageContent');
+        const fileDragOverlay = document.getElementById('fileDragOverlay');
+        const inputContainer = document.querySelector('.input-container');
+        
+        // State variables
+        let isRendered = false;
+        let currentChats = [];
+        let activeNode = null;
+        let dragCounter = 0;
+        let dragTimeout = null;
+        
+        // Configure marked.js for markdown rendering
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            headerIds: false
+        });
+        
+        // Initialize
+        function init() {
+            updateStatus('Ready');
+            setupEventListeners();
+        }
+
+        // Set up all event listeners
+        function setupEventListeners() {
+			// Action button click
+			actionBtn.addEventListener('click', handleActionButtonClick);
+			
+			// Text area input
+			jsonInput.addEventListener('input', handleTextInput);
+			
+			// File drag and drop - improved
+			document.addEventListener('dragover', handleDragOver);
+			document.addEventListener('dragleave', handleDragLeave);
+			document.addEventListener('drop', handleFileDrop);
+			document.addEventListener('dragend', handleDragEnd);
+			
+			// Prevent default behaviors on the text area specifically
+			jsonInput.addEventListener('dragover', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+			});
+			
+			jsonInput.addEventListener('drop', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				// Forward to the main handler
+				const event = new Event('drop');
+				Object.assign(event, { dataTransfer: e.dataTransfer });
+				document.dispatchEvent(event);
+			});
+		}
+        
+        // Handle action button click
+        function handleActionButtonClick() {
+            if (!isRendered) {
+                renderChatTree();
+            } else {
+                clearRendering();
+            }
+        }
+        
+        // Recursively build message tree
+        function buildMessageTree(message, messageMap, visited = new Set()) {
+            if (!message || visited.has(message.id)) {
+                return null;
+            }
+            
+            visited.add(message.id);
+            
+            const node = {
+                id: message.id,
+                role: message.role || 'unknown',
+                content: message.content || '',
+                timestamp: message.timestamp || null,
+                annotation: message.annotation || null,
+                model_id: message.model_id || message.model || null,
+                childrenIds: message.childrenIds || [],
+                children: []
+            };
+            
+            // Recursively add children
+            if (node.childrenIds && node.childrenIds.length > 0) {
+                for (const childId of node.childrenIds) {
+                    const childMessage = messageMap.get(childId);
+                    if (childMessage) {
+                        const childNode = buildMessageTree(childMessage, messageMap, visited);
+                        if (childNode) {
+                            node.children.push(childNode);
+                        }
+                    }
+                }
+            }
+            
+            return node;
+        }
+        
+        // Find root messages (messages with earliest timestamp or no parent)
+        function findRootMessages(messageArray, messageMap) {
+            const roots = [];
+            const visited = new Set();
+            
+            // First, find messages that are not children of any other message
+            const allChildren = new Set();
+            for (const msg of messageArray) {
+                if (msg.childrenIds && Array.isArray(msg.childrenIds)) {
+                    msg.childrenIds.forEach(id => allChildren.add(id));
+                }
+            }
+            
+            // Messages that are not in allChildren set are potential roots
+            for (const msg of messageArray) {
+                if (!allChildren.has(msg.id)) {
+                    roots.push(msg);
+                }
+            }
+            
+            // If no roots found by parent check, find earliest timestamp
+            if (roots.length === 0 && messageArray.length > 0) {
+                let earliest = messageArray[0];
+                for (const msg of messageArray) {
+                    if (msg.timestamp && (!earliest.timestamp || msg.timestamp < earliest.timestamp)) {
+                        earliest = msg;
+                    }
+                }
+                roots.push(earliest);
+            }
+            
+            return roots;
+        }
+        
+        // Parse JSON and extract chat trees
+        function parseChatTrees(jsonData) {
+            try {
+                const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+                
+                if (!data || typeof data !== 'object') {
+                    throw new Error('Invalid JSON structure');
+                }
+                
+                // Handle array of chats or single chat object
+                const chatElements = Array.isArray(data) ? data : 
+                                   (data.snapshot && Array.isArray(data.snapshot)) ? data.snapshot : 
+                                   (data.chats && Array.isArray(data.chats)) ? data.chats : 
+                                   [data];
+                
+                const chats = [];
+                
+                for (const chatElement of chatElements) {
+                    try {
+                        // Get chat-level data
+                        const chatData = chatElement.data || {};
+                        const chatRating = chatData.rating;
+                        const chatDetailsRating = chatData.details ? chatData.details.rating : null;
+                        const chatComment = chatData.comment || "";
+                        
+                        let messages = null;
+                        
+                        // Navigate to messages
+                        if (chatElement.snapshot && 
+                            chatElement.snapshot.chat && 
+                            chatElement.snapshot.chat.chat && 
+                            chatElement.snapshot.chat.chat.history && 
+                            chatElement.snapshot.chat.chat.history.messages) {
+                            messages = chatElement.snapshot.chat.chat.history.messages;
+                        } else if (chatElement.history && chatElement.history.messages) {
+                            messages = chatElement.history.messages;
+                        } else if (chatElement.messages) {
+                            messages = chatElement.messages;
+                        }
+
+                        const messagesCount = messages ? Object.keys(messages).length : 99;
+                        const chatTitle = chatElement.snapshot?.chat?.title || 'Untitled';
+
+                        if (!messages || typeof messages !== 'object') {
+                            console.warn('No messages found in chat element');
+                            continue;
+                        }
+                        
+                        // Convert messages object to array if needed
+                        const messageArray = Array.isArray(messages) ? messages : Object.values(messages);
+                        
+                        if (messageArray.length === 0) {
+                            continue;
+                        }
+                        
+                        // Create message map for lookup by ID
+                        const messageMap = new Map();
+                        for (const msg of messageArray) {
+                            if (msg.id) {
+                                messageMap.set(msg.id, msg);
+                            }
+                        }
+                        
+                        // Find root messages and build trees
+                        const rootMessages = findRootMessages(messageArray, messageMap);
+                        const trees = [];
+                        
+                        for (const rootMessage of rootMessages) {
+                            const tree = buildMessageTree(rootMessage, messageMap);
+                            if (tree) {
+                                trees.push(tree);
+                            }
+                        }
+
+                        if (trees.length > 0) {
+                            chats.push({
+                                trees: trees,
+                                data: chatData,
+								messagesCount: messagesCount,
+								chatTitle: chatTitle
+                            });
+                        }
+                        
+                    } catch (error) {
+                        console.warn('Error processing chat element:', error);
+                    }
+                }
+                
+                return {
+                    success: true,
+                    chats: chats,
+                    totalChats: chats.length,
+                    totalTrees: chats.reduce((sum, chat) => sum + chat.trees.length, 0),
+                    totalMessages: chats.reduce((sum, chat) => 
+                        sum + chat.trees.reduce((treeSum, tree) => 
+                            treeSum + countNodes(tree), 0), 0)
+                };
+                
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message,
+                    chats: []
+                };
+            }
+        }
+        
+        // Count nodes in a tree
+        function countNodes(node) {
+            if (!node) return 0;
+            let count = 1;
+            if (node.children && node.children.length > 0) {
+                for (const child of node.children) {
+                    count += countNodes(child);
+                }
+            }
+            return count;
+        }
+        
+        // Get first 4 characters of ID
+        function getShortId(id) {
+            if (!id || id.length < 4) return id || '????';
+            return id.substring(0, 4)+"...";
+        }
+        
+        // Render markdown content
+        function renderMarkdown(content) {
+            try {
+                const html = marked.parse(content || '');
+                const cleanHtml = DOMPurify.sanitize(html);
+                return cleanHtml;
+            } catch (error) {
+                console.error('Error rendering markdown:', error);
+                return content || '';
+            }
+        }
+        
+        // Format timestamp
+        function formatTimestamp(timestamp) {
+            try {
+                const date = new Date(timestamp * 1000 || timestamp);
+                if (isNaN(date.getTime())) {
+                    return timestamp;
+                }
+                return date.toLocaleString();
+            } catch (error) {
+                return timestamp;
+            }
+        }
+        
+        // Create tree node HTML
+        function createTreeNode(node, chatData, chatIndex, treeIndex, depth = 0) {
+            const container = document.createElement('div');
+            container.className = 'tree-node';
+            
+            // Create node content
+            const nodeContent = document.createElement('div');
+            nodeContent.className = 'tree-node-content';
+            nodeContent.dataset.id = node.id;
+            nodeContent.dataset.chatIndex = chatIndex;
+            nodeContent.dataset.treeIndex = treeIndex;
+            
+            // Determine node styling
+            let nodeClass = node.role === 'user' ? 'node-user' : 'node-assistant';
+            
+            // Check for annotation
+            if (node.role === 'assistant' && node.annotation) {
+                const thumb = node.annotation.rating;
+                if (thumb !== undefined) {
+                    if (thumb >= 0) {
+                        nodeClass = 'node-positive';
+                    } else {
+                        nodeClass = 'node-negative';
+                    }
+                }
+            }
+            
+            nodeContent.classList.add(nodeClass);
+            
+            // Add collapse control if node has children
+            if (node.children && node.children.length > 0) {
+                container.classList.add('node-has-children');
+                const collapseControl = document.createElement('div');
+                collapseControl.className = 'collapse-control';
+                collapseControl.textContent = '−';
+                collapseControl.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const isCollapsed = container.classList.contains('node-collapsed');
+                    if (isCollapsed) {
+                        container.classList.remove('node-collapsed');
+                        this.textContent = '−';
+                    } else {
+                        container.classList.add('node-collapsed');
+                        this.textContent = '+';
+                    }
+                });
+                nodeContent.appendChild(collapseControl);
+            }
+            
+            // Add emoji for assistant with annotation
+            const emojiSpan = document.createElement('span');
+            emojiSpan.className = 'node-emoji';
+            
+            if (node.role === 'assistant' && node.annotation) {
+                const thumb = node.annotation.rating;
+                if (thumb !== undefined) {
+                    emojiSpan.textContent = thumb >= 0 ? '👍' : '👎';
+                    nodeContent.appendChild(emojiSpan);
+                }
+            }
+            
+            // Add node label (first 4 chars of ID)
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'node-label';
+            labelSpan.textContent = getShortId(node.id);
+            
+            nodeContent.appendChild(labelSpan);
+            
+            // Add click handler
+            nodeContent.addEventListener('click', () => {
+                // Remove active class from all nodes
+                document.querySelectorAll('.tree-node-content').forEach(el => {
+                    el.classList.remove('active');
+                });
+                
+                // Add active class to clicked node
+                nodeContent.classList.add('active');
+                
+                // Show message content
+                showMessageContent(node, chatData, chatIndex, treeIndex);
+                activeNode = nodeContent;
+            });
+            
+            container.appendChild(nodeContent);
+            
+            // Add children if any
+            if (node.children && node.children.length > 0) {
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'node-children';
+                
+                node.children.forEach(child => {
+                    const childElement = createTreeNode(child, chatData, chatIndex, treeIndex, depth + 1);
+                    childrenContainer.appendChild(childElement);
+                });
+                
+                container.appendChild(childrenContainer);
+            }
+            
+            return container;
+        }
+        
+        // Show message content in right pane
+        function showMessageContent(node, chatData, chatIndex, treeIndex) {
+            // Hide empty state, show content display
+            emptyState.style.display = 'none';
+            contentDisplay.style.display = 'block';
+            
+            // Set content title
+            const roleText = node.role.charAt(0).toUpperCase() + node.role.slice(1);
+            contentTitle.textContent = `${roleText} Message`;
+            
+            // Set timestamp if available
+            if (node.timestamp) {
+                contentTimestamp.textContent = formatTimestamp(node.timestamp);
+                contentTimestamp.style.display = 'inline';
+            } else {
+                contentTimestamp.style.display = 'none';
+            }
+            
+            // Show annotation info for assistant messages
+            if (node.role === 'assistant' && node.annotation) {
+                annotationInfo.style.display = 'block';
+                
+                const comment = node.annotation.comment || chatData.comment || "";
+                const model = node.model_id || "";
+                
+                commentText.textContent = (chatData.rating >= 0 ? '👍' : '👎') + '  ' + comment;
+                modelId.textContent = model ? `Model: ${model}` : "";
+            } else {
+                annotationInfo.style.display = 'none';
+            }
+            
+            // Render markdown content
+            messageContent.innerHTML = renderMarkdown(node.content);
+        }
+        
+        // Render chat tree
+        function renderChatTree() {
+            const jsonText = jsonInput.value.trim();
+            
+            if (!jsonText) {
+                updateStatus('Error: No JSON content to render', true);
+                return;
+            }
+            
+            // Clear previous content
+            treePane.innerHTML = '';
+            emptyState.style.display = 'flex';
+            contentDisplay.style.display = 'none';
+            activeNode = null;
+            
+            try {
+                const result = parseChatTrees(jsonText);
+                currentChats = result.chats;
+                
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
+                
+                if (result.chats.length === 0) {
+                    throw new Error('No chat trees found in the JSON data');
+                }
+                
+                // Create container for tree
+                const treeContainer = document.createElement('div');
+                treeContainer.className = 'chat-tree-container';
+                
+                // Render each chat
+                result.chats.forEach((chat, chatIndex) => {
+                    const chatElement = document.createElement('div');
+                    chatElement.className = 'chat-thread';
+                    
+                    // Add chat header with data rating if available
+                    const chatHeader = document.createElement('div');
+                    chatHeader.className = 'thread-header';
+                    
+                    let headerText = `Conversation ${chatIndex + 1} (${chat.messagesCount} messages)`;
+                    // let headerText = `Conversation ${chatIndex + 1} `;
+                    
+                    // Add data rating to header if available
+                    if (chat.data && chat.data.rating !== undefined) {
+                        // const thumb = chat.data.rating >= 0 ? '👍' : '👎';
+                        // headerText += `<span class="data-rating">${thumb} Rating: ${chat.data.rating}</span>`;
+                        headerText += '<span class="data-rating">'+(chat.data.rating >= 0 ? '👍' : '👎')+'</span><br>'+chat.chatTitle;
+                    }
+                    
+                    chatHeader.innerHTML = headerText;
+                    chatElement.appendChild(chatHeader);
+                    
+                    // Render each tree in the chat
+                    chat.trees.forEach((tree, treeIndex) => {
+                        const treeElement = createTreeNode(tree, chat.data, chatIndex, treeIndex);
+                        chatElement.appendChild(treeElement);
+                    });
+                    
+                    treeContainer.appendChild(chatElement);
+                });
+                
+                treePane.appendChild(treeContainer);
+                
+                renderingArea.classList.add('visible');
+                isRendered = true;
+                actionBtn.textContent = 'Clear';
+                updateStatus(`Rendered ${result.totalChats} conversation(s) with ${result.totalMessages} messages`, false, true);
+                
+            } catch (error) {
+                treePane.innerHTML = `
+                    <div class="json-error">
+                        <strong>Error parsing JSON:</strong><br>
+                        ${error.message}<br><br>
+                        <strong>JSON Structure Expected:</strong><br>
+                        The JSON should contain chat history with the following structure:<br>
+                        - Each chat may have data object with rating, details.rating, and comment<br>
+                        - Messages are in: snapshot > chat > chat > history > messages<br>
+                        - Messages are objects with message IDs as keys<br>
+                        - Each message should have: role, content, childrenIds, timestamp<br>
+                        - Assistant messages may have annotation object with rating<br>
+                        - Messages are linked via childrenIds to form conversation trees
+                    </div>
+                `;
+                
+                renderingArea.classList.add('visible');
+                isRendered = true;
+                actionBtn.textContent = 'Clear';
+                updateStatus(`Error: ${error.message}`, true);
+            }
+        }
+        
+        // Clear rendering
+        function clearRendering() {
+            renderingArea.classList.remove('visible');
+            treePane.innerHTML = '';
+            emptyState.style.display = 'flex';
+            contentDisplay.style.display = 'none';
+            activeNode = null;
+            currentChats = [];
+            isRendered = false;
+            actionBtn.textContent = 'Render';
+            updateStatus('Ready');
+        }
+        
+        // Handle text input
+        function handleTextInput() {
+            const hasContent = jsonInput.value.length > 0;
+            watermark.style.opacity = hasContent ? '0' : '1';
+
+            if (isRendered && hasContent) {
+                clearRendering();
+            }
+        }
+
+        // Handle drag over
+		function handleDragOver(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			
+			// Clear any existing timeout
+			if (dragTimeout) {
+				clearTimeout(dragTimeout);
+				dragTimeout = null;
+			}
+			
+			// Only show overlay if dragging files (not text/other)
+			if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+				dragCounter++;
+				fileDragOverlay.classList.add('active');
+			}
+		}
+       
+		function handleDragLeave(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			
+			// Decrease counter when leaving the window
+			if (e.clientX <= 0 || e.clientY <= 0 || 
+				e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+				dragCounter = 0;
+				fileDragOverlay.classList.remove('active');
+			} else {
+				dragCounter = Math.max(0, dragCounter - 1);
+				
+				// Use a timeout to handle rapid leave/enter events
+				if (dragCounter === 0) {
+					dragTimeout = setTimeout(() => {
+						fileDragOverlay.classList.remove('active');
+					}, 100);
+				}
+			}
+		}
+
+		function handleDragEnd(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			
+			// Reset drag state
+			dragCounter = 0;
+			fileDragOverlay.classList.remove('active');
+			
+			// Clear any pending timeout
+			if (dragTimeout) {
+				clearTimeout(dragTimeout);
+				dragTimeout = null;
+			}
+		}
+
+		// Updated file drop handler
+		function handleFileDrop(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			
+			// Reset drag state
+			dragCounter = 0;
+			fileDragOverlay.classList.remove('active');
+			
+			// Clear any pending timeout
+			if (dragTimeout) {
+				clearTimeout(dragTimeout);
+				dragTimeout = null;
+			}
+			
+			const files = e.dataTransfer.files;
+			if (files.length === 0) return;
+			
+			const file = files[0];
+			const fileName = file.name.toLowerCase();
+			const isJsonFile = fileName.endsWith('.json');
+			
+			if (!isJsonFile) {
+				updateStatus('Error: Not a JSON file (.json)', true);
+				jsonInput.value = '';
+				watermark.style.opacity = '1';
+				clearRendering();
+				return;
+			}
+
+			const reader = new FileReader();
+
+			reader.onload = function(event) {
+				const fileContent = event.target.result;
+				jsonInput.value = fileContent;
+				watermark.style.opacity = '0';
+				updateStatus(`Loaded: ${file.name} (${Math.round(file.size/1024)}KB)`, false, true);
+
+				// Auto-render if content looks like chat data
+				if (fileContent.includes('"messages"') || fileContent.includes('"snapshot"')) {
+					setTimeout(() => renderChatTree(), 500);
+				}
+			};
+			
+			reader.onerror = function() {
+				updateStatus('Error: Failed to read file', true);
+			};
+			
+			reader.readAsText(file);
+		}
+        
+        // Update status text
+        function updateStatus(message, isError = false, isSuccess = false) {
+            statusText.textContent = message;
+            
+            if (isError) {
+                statusText.className = 'status-text error';
+            } else if (isSuccess) {
+                statusText.className = 'status-text success';
+            } else {
+                statusText.className = 'status-text';
+            }
+        }
+        
+        // Initialize
+        init();
+    </script>
+</body>
+</html>
+
