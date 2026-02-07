@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid Chart Editor</title>
+    <style>
+        :root {
+            --primary-color: #007acc;
+            --error-color: #e74c3c;
+            --success-color: #27ae60;
+            --border-color: #ddd;
+            --bg-color: #f9f9f9;
+            --text-color: #333;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #status-line {
+            padding: 8px 16px;
+            background-color: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        #status-message {
+            color: var(--success-color);
+        }
+
+        #status-message.error {
+            color: var(--error-color);
+        }
+
+        #editor-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #code-panel {
+            width: 33.33%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        #code-header {
+            padding: 8px 16px;
+            background-color: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        #code-editor {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            resize: none;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            outline: none;
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: auto;
+            tab-size: 4;
+        }
+
+        #preview-panel {
+            width: 66.67%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #preview-header {
+            padding: 8px 16px;
+            background-color: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        #preview {
+            flex: 1;
+            padding: 20px;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            background-color: white;
+        }
+
+        #mermaid-diagram {
+            max-width: 100%;
+        }
+
+        /* Resizable divider */
+        #divider {
+            width: 8px;
+            background-color: var(--border-color);
+            cursor: col-resize;
+            flex-shrink: 0;
+            position: relative;
+            transition: background-color 0.2s;
+        }
+
+        #divider:hover {
+            background-color: var(--primary-color);
+        }
+
+        #divider::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 2px;
+            width: 4px;
+            height: 100%;
+            background-color: transparent;
+            transition: background-color 0.2s;
+        }
+
+        #divider:hover::before {
+            background-color: var(--primary-color);
+        }
+
+        /* Drag and drop overlay */
+        #drop-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 122, 204, 0.1);
+            border: 2px dashed var(--primary-color);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            color: var(--primary-color);
+            font-weight: 500;
+            z-index: 100;
+        }
+
+        #drop-overlay.active {
+            display: flex;
+        }
+
+        @media (max-width: 768px) {
+            #editor-container {
+                flex-direction: column;
+            }
+            
+            #code-panel, #preview-panel {
+                width: 100%;
+                height: 50%;
+            }
+
+            #divider {
+                width: 100%;
+                height: 8px;
+                cursor: row-resize;
+            }
+
+            #divider::before {
+                top: 2px;
+                left: 0;
+                width: 100%;
+                height: 4px;
+            }
+        }
+
+        #zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #zoom-controls button {
+            padding: 4px 8px;
+            font-size: 12px;
+            border: 1px solid var(--border-color);
+            background: white;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        #zoom-controls button:hover {
+            background: var(--bg-color);
+        }
+
+        #zoom-level {
+            min-width: 50px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div id="status-line">
+        <span>Mermaid Chart Editor</span>
+        <span>Status: <span id="status-message">Ready</span></span>
+        <span id="zoom-controls">
+            <button id="zoom-out">Smaller (-10%)</button>
+            <span id="zoom-level">100%</span>
+            <button id="zoom-in">Larger (+10%)</button>
+            <button id="fit-to-screen">Fit to Screen</button>
+        </span>
+    </div>
+
+    <div id="editor-container">
+        <div id="code-panel">
+            <div id="code-header">Mermaid Code</div>
+            <textarea id="code-editor" placeholder="Enter your Mermaid code here or drag & drop a file...">
+architecture-beta
+	service ldn(cloud)[LD Network]
+
+	group aissist(cloud)[AiSSIST]
+
+	service router(internet)[NAT Gateway] in aissist
+	service db(database)[Database] in aissist
+	service disk1(disk)[Storage] in aissist
+	service disk2(disk)[Storage] in aissist
+	service server(mdi:train-car-box)[Server] in aissist
+
+	ldn:R -- L:router
+	router:R -- L:server
+	db:L -- R:server
+	disk1:T -- B:server
+	disk2:T -- B:db
+			</textarea>
+            <div id="drop-overlay">Drop file to load Mermaid code</div>
+        </div>
+        
+        <div id="divider"></div>
+        
+        <div id="preview-panel">
+            <div id="preview-header">Diagram Preview</div>
+            <div id="preview">
+                <div id="mermaid-diagram"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+        // DOM elements
+        const statusMessage = document.getElementById('status-message');
+        const codeEditor = document.getElementById('code-editor');
+        const mermaidDiagram = document.getElementById('mermaid-diagram');
+        const dropOverlay = document.getElementById('drop-overlay');
+
+        // Initialize Mermaid with security settings
+        mermaid.initialize({
+            securityLevel: 'loose',
+            theme: 'default'
+        });
+
+        // Register icon packs from CDN
+        async function registerIconPacks() {
+            try {
+                await mermaid.registerIconPacks([
+                    {
+                        name: 'mdi',
+                        loader: () =>
+                            fetch('https://unpkg.com/@iconify-json/mdi@1/icons.json')
+                            .then(res => {
+                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                return res.json();
+                            })
+                            .catch(err => {
+                                console.warn('Failed to load mdi icon pack:', err);
+                                return {};
+                            })
+                    },
+                    {
+                        name: 'box',
+                        loader: () =>
+                            fetch('https://unpkg.com/@iconify-json/bxl@1/icons.json')
+                            .then(res => {
+                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                return res.json();
+                            })
+                            .catch(err => {
+                                console.warn('Failed to load box icon pack:', err);
+                                return {};
+                            })
+                    },
+                    {
+                        name: 'sharp',
+                        loader: () =>
+                            fetch('https://unpkg.com/@iconify-json/streamline-sharp@1/icons.json')
+                            .then(res => {
+                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                return res.json();
+                            })
+                            .catch(err => {
+                                console.warn('Failed to load sharp icon pack:', err);
+                                return {};
+                            })
+                    }
+                ]);
+                updateStatus('Icon packs ready', 'success');
+            } catch (error) {
+                console.error('Failed to register icon packs:', error);
+                updateStatus('Error registering icon packs', 'error');
+            }
+        }
+
+        // Update status line
+        function updateStatus(message, type = 'normal') {
+            statusMessage.textContent = message;
+            statusMessage.className = '';
+
+            if (type === 'error') {
+                statusMessage.classList.add('error');
+            } else if (type === 'success') {
+                statusMessage.classList.remove('error');
+            }
+        }
+
+        // Zoom state
+        let currentZoom = 1;
+        const ZOOM_STEP = 0.1;
+
+        // DOM elements for zoom
+        const zoomLevelElement = document.getElementById('zoom-level');
+        const zoomInButton = document.getElementById('zoom-in');
+        const zoomOutButton = document.getElementById('zoom-out');
+        const fitToScreenButton = document.getElementById('fit-to-screen');
+
+        // Update zoom display and apply transformation
+        function updateZoomDisplay() {
+            zoomLevelElement.textContent = `${Math.round(currentZoom * 100)}%`;
+            
+            const svgElement = mermaidDiagram.querySelector('svg');
+            if (svgElement) {
+                svgElement.style.transform = `scale(${currentZoom})`;
+                svgElement.style.transformOrigin = 'center top';
+            }
+        }
+
+        // Zoom in function
+        function zoomIn() {
+            currentZoom += ZOOM_STEP;
+            updateZoomDisplay();
+        }
+
+        // Zoom out function
+        function zoomOut() {
+            currentZoom = Math.max(0.1, currentZoom - ZOOM_STEP);
+            updateZoomDisplay();
+        }
+
+        // Fit to screen function
+        function fitToScreen() {
+            const svgElement = mermaidDiagram.querySelector('svg');
+            if (!svgElement) return;
+            
+            const previewWidth = document.getElementById('preview').clientWidth - 40;
+            const svgWidth = svgElement.getBoundingClientRect().width;
+            
+            if (svgWidth > 0) {
+                currentZoom = (previewWidth / svgWidth) * 0.95;
+                updateZoomDisplay();
+            }
+        }
+
+        // Resizable divider functionality
+        function initResizableDivider() {
+            const divider = document.getElementById('divider');
+            const codePanel = document.getElementById('code-panel');
+            const previewPanel = document.getElementById('preview-panel');
+            const container = document.getElementById('editor-container');
+            
+            let isResizing = false;
+            
+            divider.addEventListener('mousedown', function(e) {
+                isResizing = true;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                
+                function onMouseMove(e) {
+                    if (!isResizing) return;
+                    
+                    const containerRect = container.getBoundingClientRect();
+                    const x = e.clientX - containerRect.left;
+                    const percentage = (x / containerRect.width) * 100;
+                    
+                    // Set limits (10% to 90%)
+                    const newWidth = Math.max(10, Math.min(90, percentage));
+                    
+                    codePanel.style.width = `${newWidth}%`;
+                    previewPanel.style.width = `${100 - newWidth}%`;
+                }
+                
+                function onMouseUp() {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                }
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        }
+
+        // File drag and drop functionality
+        function initFileDrop() {
+            const codePanel = document.getElementById('code-panel');
+            
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                codePanel.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            // Highlight drop area when item is dragged over it
+            ['dragenter', 'dragover'].forEach(eventName => {
+                codePanel.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                codePanel.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                dropOverlay.classList.add('active');
+            }
+            
+            function unhighlight() {
+                dropOverlay.classList.remove('active');
+            }
+            
+            // Handle dropped files
+            codePanel.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length === 0) return;
+                
+                const file = files[0];
+                
+                // Check if file is text-based
+                if (file.type && !file.type.startsWith('text/') && 
+                    !file.name.endsWith('.mmd') && 
+                    !file.name.endsWith('.md') && 
+                    !file.name.endsWith('.txt')) {
+                    updateStatus('File error: Please drop a text file', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    try {
+                        const content = e.target.result;
+                        // Check if content contains null bytes (binary file indicator)
+                        if (content.includes('\0')) {
+                            updateStatus('File error: Binary files not supported', 'error');
+                            return;
+                        }
+                        
+                        codeEditor.value = content;
+                        renderDiagram();
+                        updateStatus('File loaded successfully', 'success');
+                    } catch (error) {
+                        updateStatus('File error: Could not read file', 'error');
+                    }
+                };
+                
+                reader.onerror = function() {
+                    updateStatus('File error: Could not read file', 'error');
+                };
+                
+                reader.readAsText(file);
+            }
+        }
+
+        // Render Mermaid diagram
+        async function renderDiagram() {
+            const graphDefinition = codeEditor.value;
+            const previewElement = document.getElementById('mermaid-diagram');
+
+            if (!graphDefinition.trim()) {
+                previewElement.innerHTML = '<p>Enter Mermaid code to see the diagram</p>';
+                return;
+            }
+
+            updateStatus('Checking syntax...');
+
+            // Validate syntax first using mermaid.parse
+            try {
+                await mermaid.parse(graphDefinition);
+            } catch (parseError) {
+                console.error('Mermaid parsing error:', parseError);
+                previewElement.innerHTML = `
+                    <div style="color: var(--error-color); padding: 20px;">
+                        <h3>Syntax Error Found</h3>
+                        <p>${parseError.message || 'Invalid Mermaid syntax.'}</p>
+                    </div>
+                `;
+                updateStatus('Syntax error', 'error');
+                return;
+            }
+
+            updateStatus('Rendering...');
+
+            try {
+                // Generate a unique ID for this render
+                const tempId = 'mermaid-svg-' + Date.now();
+                
+                // Mermaid renders the diagram and returns the SVG code
+                const { svg, bindFunctions } = await mermaid.render(tempId, graphDefinition);
+                
+                // Insert the generated SVG into the preview pane
+                previewElement.innerHTML = svg;
+
+                // Bind events if they exist (for interactive diagrams)
+                if (bindFunctions) {
+                    bindFunctions(previewElement);
+                }
+    
+                fitToScreen();
+                
+                updateStatus('Rendering successful', 'success');
+                
+            } catch (error) {
+                console.error('Mermaid rendering error:', error);
+                previewElement.innerHTML = `
+                    <div style="color: var(--error-color); padding: 20px; text-align: center;">
+                        <b>Rendering Error</b>
+                        <p>${error.message || 'Invalid Mermaid syntax'}</p>
+                    </div>
+                `;
+                updateStatus('Rendering failed', 'error');
+            }
+        }
+
+        // Initialize the application
+        async function initializeApp() {
+            updateStatus('Initializing Mermaid and icons...');
+            try {
+                await registerIconPacks();
+                
+                // Initialize additional features
+                initResizableDivider();
+                initFileDrop();
+                
+                // Render the initial diagram
+                await renderDiagram();
+                
+                // Set up auto-render on code changes
+                let renderTimeout;
+                codeEditor.addEventListener('input', () => {
+                    clearTimeout(renderTimeout);
+                    renderTimeout = setTimeout(renderDiagram, 500);
+                });
+                
+                // Add zoom event listeners
+                zoomInButton.addEventListener('click', zoomIn);
+                zoomOutButton.addEventListener('click', zoomOut);
+                fitToScreenButton.addEventListener('click', fitToScreen);
+                
+                updateStatus('Ready', 'success');
+            } catch (error) {
+                console.error('Initialization failed:', error);
+                updateStatus('Initialization failed', 'error');
+            }
+        }
+
+        // Start the application
+        initializeApp();
+    </script>
+</body>
+</html>
