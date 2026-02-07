@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown Renderer</title>
+    <!-- Markdown libraries from CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background-color: #f5f5f5;
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+            background-color: #e0e0e0;
+            padding: 0 15px;
+            color: #333;
+            border-bottom: 1px solid #ccc;
+        }
+        
+        .status-text {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .action-button {
+            padding: 5px 15px;
+            background-color: #4a6fa5;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        .action-button:hover {
+            background-color: #3a5a8c;
+        }
+        
+        .action-button:active {
+            background-color: #2a4a7c;
+        }
+        
+        /* Main content area */
+        .content-area {
+            position: relative;
+            height: calc(100vh - 40px);
+            width: 100%;
+        }
+        
+        /* Text area for markdown input */
+        .input-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            transition: left 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .text-area-wrapper {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+        }
+        
+        .text-area {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ddd;
+            padding: 15px;
+            font-size: 16px;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            background-color: transparent;
+        }
+        
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #aaa;
+            text-align: center;
+            pointer-events: none;
+            width: 80%;
+            transition: opacity 0.3s;
+        }
+        
+        /* Rendering area */
+        .rendering-container {
+            position: absolute;
+            top: 0;
+            left: 100%;
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            background-color: #e8f5e8;
+            overflow-y: auto;
+            transition: left 0.3s ease;
+            z-index: 10;
+        }
+        
+        .rendering-container.visible {
+            left: 0;
+        }
+        
+        .markdown-body {
+            background-color: transparent;
+            font-size: 16px;
+            padding: 20px;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        
+        /* File drag overlay */
+        .file-drag-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(74, 111, 165, 0.1);
+            border: 3px dashed #4a6fa5;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: #4a6fa5;
+            z-index: 20;
+        }
+        
+        .file-drag-overlay.active {
+            display: flex;
+        }
+        
+        /* Error message styling */
+        .error {
+            color: #c44;
+            font-weight: bold;
+        }
+        
+        .success {
+            color: #484;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-text">Ready</div>
+        <button class="action-button" id="actionBtn">Render</button>
+    </div>
+    
+    <!-- Main Content Area -->
+    <div class="content-area">
+        <!-- Text Input Area -->
+        <div class="input-container">
+            <div class="text-area-wrapper">
+                <textarea class="text-area" id="markdownInput"></textarea>
+                <div class="watermark" id="watermark">
+                    Paste Markdown text or drag a markdown file here
+                </div>
+            </div>
+        </div>
+        
+        <!-- Rendering Area -->
+        <div class="rendering-container" id="renderingArea">
+            <div class="markdown-body" id="renderedContent">
+                <!-- Rendered markdown will appear here -->
+            </div>
+        </div>
+        
+        <!-- File Drag Overlay -->
+        <div class="file-drag-overlay" id="fileDragOverlay">
+            Drop markdown file here
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const statusText = document.querySelector('.status-text');
+        const actionBtn = document.getElementById('actionBtn');
+        const markdownInput = document.getElementById('markdownInput');
+        const watermark = document.getElementById('watermark');
+        const renderingArea = document.getElementById('renderingArea');
+        const renderedContent = document.getElementById('renderedContent');
+        const fileDragOverlay = document.getElementById('fileDragOverlay');
+        const inputContainer = document.querySelector('.input-container');
+        
+        // State variables
+        let isRendered = false;
+        
+        // Configure marked.js
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            headerIds: false
+        });
+        
+        // Initialize
+        function init() {
+            updateStatus('Ready');
+            setupEventListeners();
+        }
+        
+        // Set up all event listeners
+        function setupEventListeners() {
+            // Action button click
+            actionBtn.addEventListener('click', handleActionButtonClick);
+            
+            // Text area input
+            markdownInput.addEventListener('input', handleTextInput);
+            
+            // File drag and drop
+            inputContainer.addEventListener('dragover', handleDragOver);
+            inputContainer.addEventListener('dragleave', handleDragLeave);
+            inputContainer.addEventListener('drop', handleFileDrop);
+            
+            // Prevent default drag behaviors
+            document.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            
+            document.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        }
+        
+        // Handle action button click
+        function handleActionButtonClick() {
+            if (!isRendered) {
+                // Render markdown
+                renderMarkdown();
+            } else {
+                // Clear rendering
+                clearRendering();
+            }
+        }
+        
+        // Render markdown content
+        function renderMarkdown() {
+            const markdownText = markdownInput.value.trim();
+            
+            if (!markdownText) {
+                updateStatus('Error: No markdown content to render', true);
+                return;
+            }
+            
+            // Sanitize and render markdown
+            const html = marked.parse(markdownText);
+            const cleanHtml = DOMPurify.sanitize(html);
+            
+            // Update rendering area
+            renderedContent.innerHTML = cleanHtml;
+            
+            // Show rendering area with slide effect
+            renderingArea.classList.add('visible');
+            
+            // Update UI state
+            isRendered = true;
+            actionBtn.textContent = 'Clear';
+            updateStatus('Rendered', false, true);
+        }
+        
+        // Clear rendering and hide rendering area
+        function clearRendering() {
+            // Hide rendering area with slide effect
+            renderingArea.classList.remove('visible');
+            
+            // Clear rendered content
+            renderedContent.innerHTML = '';
+            
+            // Update UI state
+            isRendered = false;
+            actionBtn.textContent = 'Render';
+            updateStatus('Ready');
+        }
+        
+        // Handle text input
+        function handleTextInput() {
+            const hasContent = markdownInput.value.length > 0;
+
+            // Show/hide watermark
+            watermark.style.opacity = hasContent ? '0' : '1';
+
+            // Clear rendered content if user types after rendering
+            if (isRendered && hasContent) {
+                clearRendering();
+            }
+        }
+        
+        // Handle drag over
+        function handleDragOver(e) {
+            e.preventDefault();
+            fileDragOverlay.classList.add('active');
+        }
+        
+        // Handle drag leave
+        function handleDragLeave(e) {
+            e.preventDefault();
+            // Only remove overlay if not dragging over child elements
+            if (!inputContainer.contains(e.relatedTarget)) {
+                fileDragOverlay.classList.remove('active');
+            }
+        }
+        
+        // Handle file drop
+        function handleFileDrop(e) {
+            e.preventDefault();
+            fileDragOverlay.classList.remove('active');
+            
+            const files = e.dataTransfer.files;
+            
+            if (files.length === 0) return;
+            
+            const file = files[0];
+            
+            // Check if file is markdown (by extension)
+            const fileName = file.name.toLowerCase();
+            const isMarkdownFile = fileName.endsWith('.md') || 
+                                   fileName.endsWith('.markdown') || 
+                                   fileName.endsWith('.mdown');
+            
+            if (!isMarkdownFile) {
+                updateStatus('Error: Not a markdown file (.md, .markdown, .mdown)', true);
+                // Reset to fresh state
+                markdownInput.value = '';
+                watermark.style.opacity = '1';
+                clearRendering();
+                return;
+            }
+
+            // Read the file
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                const fileContent = event.target.result;
+
+                // Update text area with file content
+                markdownInput.value = fileContent;
+                watermark.style.opacity = '0';
+
+                updateStatus('Markdown file loaded successfully', false, true);
+            };
+            
+            reader.onerror = function() {
+                updateStatus('Error: Failed to read file', true);
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        // Update status text
+        function updateStatus(message, isError = false, isSuccess = false) {
+            statusText.textContent = message;
+            
+            if (isError) {
+                statusText.className = 'status-text error';
+            } else if (isSuccess) {
+                statusText.className = 'status-text success';
+            } else {
+                statusText.className = 'status-text';
+            }
+        }
+        
+        // Initialize the application
+        init();
+    </script>
+</body>
+</html>
