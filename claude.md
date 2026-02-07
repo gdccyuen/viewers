@@ -14,4 +14,5 @@ The following paths should be excluded from code analysis and searches:
 - **tiaga.html** - Markdown viewer with Task entity display support
 - **bus.html** - Hong Kong bus ETA display using Transport Department APIs
 - **chat.html** - JSON chat history renderer with markdown support and rating annotations
+- **chattree.html** - JSON chat tree explorer with collapsible message hierarchy
 
